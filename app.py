@@ -21,7 +21,48 @@ st.set_page_config(
 )
 
 
-@st.cache_resource
+st.markdown(
+    """
+    <style>
+    .main { padding-top: 1rem; }
+    .block-container { padding-top: 2rem; max-width: 1100px; }
+    h1 { color: #1f2937; font-weight: 700; }
+    .subtitle { color: #6b7280; font-size: 1.05rem; margin-top: -0.5rem; margin-bottom: 1.5rem; }
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 1.25rem;
+        border-radius: 10px;
+        text-align: center;
+    }
+    .stat-card .label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.9; }
+    .stat-card .value { font-size: 1.6rem; font-weight: 700; margin-top: 0.25rem; }
+    .summary-box {
+        background: #f8fafc;
+        border-left: 4px solid #667eea;
+        padding: 1.25rem 1.5rem;
+        border-radius: 6px;
+        line-height: 1.65;
+        color: #1f2937;
+        white-space: pre-wrap;
+    }
+    .stButton > button, .stDownloadButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        font-weight: 600;
+        padding: 0.55rem 1.25rem;
+        border-radius: 8px;
+    }
+    .stButton > button:hover, .stDownloadButton > button:hover { opacity: 0.92; }
+    footer { visibility: hidden; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+@st.cache_resource(show_spinner="Loading BART summarization model (first run downloads ~1.6GB)…")
 def load_summarizer():
     return pipeline("summarization", model=MODEL_NAME)
 
@@ -71,45 +112,64 @@ def summarize_text(summarizer, text: str, max_words: int) -> str:
         pieces.append(out[0]["summary_text"].strip())
         progress.progress(i / len(chunks), text=f"Summarizing chunk {i}/{len(chunks)}…")
     progress.empty()
-    return " ".join(pieces)
+    combined = " ".join(pieces)
+    if len(chunks) > 1 and len(combined.split()) > max_words * 1.5:
+        final = summarizer(
+            combined,
+            max_length=max_tokens,
+            min_length=min_tokens,
+            do_sample=False,
+            truncation=True,
+        )
+        combined = final[0]["summary_text"].strip()
+    return combined
 
 
 def stat_card(label: str, value: str) -> str:
-    return (
-        f'<div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);'
-        f'color:white;padding:1rem 1.25rem;border-radius:10px;text-align:center;">'
-        f'<div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.9;">{label}</div>'
-        f'<div style="font-size:1.6rem;font-weight:700;margin-top:0.25rem;">{value}</div>'
-        f'</div>'
-    )
+    return f'<div class="stat-card"><div class="label">{label}</div><div class="value">{value}</div></div>'
 
 
 def main() -> None:
     st.title("📄 AI Research Paper Summarizer")
-    st.caption("Upload a PDF and get a concise summary powered by facebook/bart-large-cnn.")
+    st.markdown(
+        '<div class="subtitle">Upload a PDF and get a concise summary powered by '
+        'Hugging Face <code>facebook/bart-large-cnn</code>.</div>',
+        unsafe_allow_html=True,
+    )
 
     with st.sidebar:
         st.header("⚙️ Settings")
         max_words = st.slider("Summary length (words)", 50, 150, 100, step=10)
-        st.caption("Longer summaries preserve more detail.")
+        st.caption("Longer summaries preserve more detail; shorter ones are punchier.")
+        st.divider()
+        st.markdown("**Model:** `facebook/bart-large-cnn`")
+        st.markdown("**Chunking:** ~700 words per pass")
 
-    uploaded = st.file_uploader("Upload a PDF", type=["pdf"])
+    uploaded = st.file_uploader("Upload a PDF", type=["pdf"], accept_multiple_files=False)
+
     if uploaded is None:
-        st.info("Drop a PDF above to get started.")
+        st.info("👆 Drop a research paper PDF above to get started.")
         return
 
+    file_bytes = uploaded.read()
     try:
-        with st.spinner("Extracting text…"):
-            text = extract_pdf_text(uploaded.read())
+        with st.spinner("Extracting text from PDF…"):
+            text = extract_pdf_text(file_bytes)
     except PdfReadError:
         st.error("This file does not appear to be a valid PDF, or it is corrupted.")
         return
     except ValueError as e:
         st.error(str(e))
         return
+    except Exception as e:
+        st.error(f"Could not read PDF: {e}")
+        return
 
     if not text.strip():
-        st.warning("No extractable text — likely a scanned/image PDF.")
+        st.warning(
+            "No extractable text found in this PDF — it may be a scanned/image-based document. "
+            "OCR support (pytesseract) can be added as a fallback."
+        )
         return
 
     word_count = len(text.split())
@@ -123,13 +183,22 @@ def main() -> None:
         st.text(text[:2000] + ("…" if len(text) > 2000 else ""))
 
     if st.button("✨ Generate summary"):
-        summarizer = load_summarizer()
+        try:
+            summarizer = load_summarizer()
+        except Exception as e:
+            st.error(f"Failed to load summarization model: {e}")
+            return
+
         start = time.time()
-        summary = summarize_text(summarizer, text, max_words)
+        try:
+            summary = summarize_text(summarizer, text, max_words)
+        except Exception as e:
+            st.error(f"Summarization failed: {e}")
+            return
         elapsed = time.time() - start
 
         st.subheader("📝 Summary")
-        st.write(summary)
+        st.markdown(f'<div class="summary-box">{summary}</div>', unsafe_allow_html=True)
 
         summary_words = len(summary.split())
         cols = st.columns(3)
