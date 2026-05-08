@@ -39,6 +39,19 @@ streamlit run app.py
 
 The app opens at <http://localhost:8501>. The first summarization downloads the BART model (~1.6 GB) into the Hugging Face cache; subsequent runs are fast.
 
+## Docker
+
+```bash
+docker build -t ai-paper-summarizer .
+docker run --rm -p 8501:8501 ai-paper-summarizer
+```
+
+Mount a host directory at `/app/.cache/huggingface` to persist the model between runs:
+
+```bash
+docker run --rm -p 8501:8501 -v $HOME/.cache/huggingface:/app/.cache/huggingface ai-paper-summarizer
+```
+
 ## Deploy to Streamlit Cloud
 
 1. Push this repo to GitHub (public).
@@ -52,6 +65,7 @@ The app opens at <http://localhost:8501>. The first summarization downloads the 
 ai-paper-summarizer/
 ├── app.py              # Streamlit entry point
 ├── requirements.txt    # Pinned dependencies
+├── Dockerfile          # Container build
 ├── .gitignore
 └── README.md
 ```
