@@ -74,6 +74,16 @@ def summarize_text(summarizer, text: str, max_words: int) -> str:
     return " ".join(pieces)
 
 
+def stat_card(label: str, value: str) -> str:
+    return (
+        f'<div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);'
+        f'color:white;padding:1rem 1.25rem;border-radius:10px;text-align:center;">'
+        f'<div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.9;">{label}</div>'
+        f'<div style="font-size:1.6rem;font-weight:700;margin-top:0.25rem;">{value}</div>'
+        f'</div>'
+    )
+
+
 def main() -> None:
     st.title("📄 AI Research Paper Summarizer")
     st.caption("Upload a PDF and get a concise summary powered by facebook/bart-large-cnn.")
@@ -102,6 +112,13 @@ def main() -> None:
         st.warning("No extractable text — likely a scanned/image PDF.")
         return
 
+    word_count = len(text.split())
+    char_count = len(text)
+    cols = st.columns(3)
+    cols[0].markdown(stat_card("Words extracted", f"{word_count:,}"), unsafe_allow_html=True)
+    cols[1].markdown(stat_card("Characters", f"{char_count:,}"), unsafe_allow_html=True)
+    cols[2].markdown(stat_card("Target length", f"{max_words} words"), unsafe_allow_html=True)
+
     with st.expander("Preview extracted text"):
         st.text(text[:2000] + ("…" if len(text) > 2000 else ""))
 
@@ -110,9 +127,26 @@ def main() -> None:
         start = time.time()
         summary = summarize_text(summarizer, text, max_words)
         elapsed = time.time() - start
+
         st.subheader("📝 Summary")
         st.write(summary)
-        st.caption(f"Generated in {elapsed:.1f}s")
+
+        summary_words = len(summary.split())
+        cols = st.columns(3)
+        cols[0].markdown(stat_card("Summary words", str(summary_words)), unsafe_allow_html=True)
+        cols[1].markdown(
+            stat_card("Compression", f"{(1 - summary_words / max(word_count, 1)) * 100:.1f}%"),
+            unsafe_allow_html=True,
+        )
+        cols[2].markdown(stat_card("Time", f"{elapsed:.1f}s"), unsafe_allow_html=True)
+
+        base_name = uploaded.name.rsplit(".", 1)[0]
+        st.download_button(
+            label="⬇️ Download summary (.txt)",
+            data=summary,
+            file_name=f"{base_name}_summary.txt",
+            mime="text/plain",
+        )
 
 
 if __name__ == "__main__":
