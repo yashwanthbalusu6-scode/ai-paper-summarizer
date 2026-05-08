@@ -2,7 +2,7 @@
 
 AI-powered research paper summarizer using Hugging Face Transformers and Streamlit. Drop in a PDF and get a concise, length-controlled summary in seconds.
 
-> **Live demo:** _add your Streamlit Cloud URL here after deploying._
+> **Live demo:** <https://huggingface.co/spaces/yashjanthb/ai-paper-summarizer> · direct app: <https://yashjanthb-ai-paper-summarizer.hf.space>
 
 ## Features
 
@@ -52,10 +52,20 @@ Mount a host directory at `/app/.cache/huggingface` to persist the model between
 docker run --rm -p 8501:8501 -v $HOME/.cache/huggingface:/app/.cache/huggingface ai-paper-summarizer
 ```
 
-## Deploy to Streamlit Cloud
+## Deploy
+
+### Hugging Face Spaces (current live demo)
+
+The app runs as a Docker Space at <https://huggingface.co/spaces/yashjanthb/ai-paper-summarizer>. The same `Dockerfile` in this repo is used. To deploy your own copy:
+
+1. Create a Space at <https://huggingface.co/new-space> → SDK = `Docker`.
+2. Push `app.py`, `requirements.txt`, and `Dockerfile` to the Space's git remote (or upload via the UI).
+3. Add a `README.md` with `sdk: docker` and `app_port: 8501` in the YAML frontmatter.
+
+### Streamlit Community Cloud
 
 1. Push this repo to GitHub (public).
-2. Go to <https://streamlit.io/cloud> and sign in with GitHub.
+2. Go to <https://share.streamlit.io/deploy> and sign in with GitHub.
 3. **New app** → pick this repo, branch `main`, main file `app.py`.
 4. Deploy. The first build pulls dependencies (~5 min) and the first run pulls the model.
 
