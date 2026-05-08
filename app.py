@@ -1,4 +1,5 @@
 import io
+import time
 from typing import List
 
 import streamlit as st
@@ -16,9 +17,11 @@ st.set_page_config(
     page_title="AI Research Paper Summarizer",
     page_icon="📄",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
+@st.cache_resource
 def load_summarizer():
     return pipeline("summarization", model=MODEL_NAME)
 
@@ -55,8 +58,9 @@ def summarize_text(summarizer, text: str, max_words: int) -> str:
         return ""
     max_tokens = max(40, int(max_words * 1.3))
     min_tokens = max(20, int(max_tokens * 0.4))
+    progress = st.progress(0.0, text="Summarizing…")
     pieces: List[str] = []
-    for chunk in chunks:
+    for i, chunk in enumerate(chunks, start=1):
         out = summarizer(
             chunk,
             max_length=max_tokens,
@@ -65,19 +69,28 @@ def summarize_text(summarizer, text: str, max_words: int) -> str:
             truncation=True,
         )
         pieces.append(out[0]["summary_text"].strip())
+        progress.progress(i / len(chunks), text=f"Summarizing chunk {i}/{len(chunks)}…")
+    progress.empty()
     return " ".join(pieces)
 
 
 def main() -> None:
     st.title("📄 AI Research Paper Summarizer")
+    st.caption("Upload a PDF and get a concise summary powered by facebook/bart-large-cnn.")
+
+    with st.sidebar:
+        st.header("⚙️ Settings")
+        max_words = st.slider("Summary length (words)", 50, 150, 100, step=10)
+        st.caption("Longer summaries preserve more detail.")
 
     uploaded = st.file_uploader("Upload a PDF", type=["pdf"])
     if uploaded is None:
-        st.info("Drop a PDF above to summarize it.")
+        st.info("Drop a PDF above to get started.")
         return
 
     try:
-        text = extract_pdf_text(uploaded.read())
+        with st.spinner("Extracting text…"):
+            text = extract_pdf_text(uploaded.read())
     except PdfReadError:
         st.error("This file does not appear to be a valid PDF, or it is corrupted.")
         return
@@ -89,11 +102,17 @@ def main() -> None:
         st.warning("No extractable text — likely a scanned/image PDF.")
         return
 
-    if st.button("Generate summary"):
+    with st.expander("Preview extracted text"):
+        st.text(text[:2000] + ("…" if len(text) > 2000 else ""))
+
+    if st.button("✨ Generate summary"):
         summarizer = load_summarizer()
-        summary = summarize_text(summarizer, text, max_words=100)
-        st.subheader("Summary")
+        start = time.time()
+        summary = summarize_text(summarizer, text, max_words)
+        elapsed = time.time() - start
+        st.subheader("📝 Summary")
         st.write(summary)
+        st.caption(f"Generated in {elapsed:.1f}s")
 
 
 if __name__ == "__main__":
